@@ -89,6 +89,8 @@ graphify-out/
 # by pages.yml on every deploy. Committing them would let a stale page be
 # reviewed as if it were source.
 /site/benchmarks/
+# One share card per catalog benchmark, drawn by the Pages build (issue #671).
+/site/cards/
 # Static app pages are rebuilt by `benchmark-radar classify` from the
 # committed snapshots and report registries. Keep them derived for the same
 # reason as the benchmark pages: the generator and inputs are reviewed, not a

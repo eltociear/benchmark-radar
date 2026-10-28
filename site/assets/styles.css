@@ -7632,3 +7632,43 @@ a.radar-source::after {
   color: inherit;
   vertical-align: middle;
 }
+
+/* One inline thank-you line with a star link; it sits beside the action that
+   triggered it, so it needs no overlay. */
+.star-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  margin: 0.6rem 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font-family: var(--body);
+  font-size: 0.85rem;
+}
+
+/* Under the form, not under the pitch beside it. Counting from the end keeps
+   the stacked mobile layout at one column. */
+.footer-signup .star-prompt {
+  grid-column: -2 / -1;
+  margin: 0;
+}
+
+.star-prompt-link {
+  color: var(--blue-deep);
+  font-weight: 600;
+}
+
+.star-prompt-dismiss {
+  margin-left: auto;
+  padding: 0 0.35rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}

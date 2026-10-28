@@ -1146,6 +1146,10 @@ const I18N = {
       "完整数据集可以免费下载。如果它帮你节省了研究时间，请给仓库点个 Star，让更多评测开发者找到它。",
     Download: "下载",
     "Star the repository": "给仓库点 Star",
+    "Star on GitHub": "在 GitHub 上点 Star",
+    "Thanks for subscribing. A GitHub star helps other eval builders find Benchmark Radar.": "感谢订阅。在 GitHub 上点个 Star，能让更多做评测的人找到 Benchmark Radar。",
+    "Thanks for citing. A GitHub star helps other eval builders find Benchmark Radar.": "感谢引用。在 GitHub 上点个 Star，能让更多做评测的人找到 Benchmark Radar。",
+    "Saved benchmarks stay in this browser. Star the repository to find Benchmark Radar again anywhere.": "收藏的 benchmark 只保存在这个浏览器里。给仓库点个 Star，换台设备也能找回 Benchmark Radar。",
     "If this saved you research time, cite the work, star the repo and help other eval builders find it.":
       "如果它帮你节省了研究时间，请引用这项工作、给仓库点 Star，让更多评测开发者找到它。",
     Cite: "引用",
@@ -6091,6 +6095,62 @@ function librarySignalFact(record) {
   });
 }
 
+// Readers star a repository right after it was useful to them, not from a
+// footer that only 9% of homepage visitors scroll to. One prompt per browser,
+// after the first subscribe, citation copy or save, so it never turns into a nag.
+const STAR_PROMPT_KEY = "benchmark-radar:star-prompt:v1";
+const STAR_PROMPT_COPY = {
+  subscribe: "Thanks for subscribing. A GitHub star helps other eval builders find Benchmark Radar.",
+  cite: "Thanks for citing. A GitHub star helps other eval builders find Benchmark Radar.",
+  save: "Saved benchmarks stay in this browser. Star the repository to find Benchmark Radar again anywhere.",
+};
+let starPromptShown = false;
+
+// Clarity exists only after the visitor consents, so without consent nothing is sent.
+function trackStarPrompt(name) {
+  window.clarity?.("event", name);
+}
+
+function starPrompt(trigger, onClose) {
+  if (starPromptShown) return null;
+  starPromptShown = true;
+  try {
+    if (window.localStorage.getItem(STAR_PROMPT_KEY)) return null;
+    window.localStorage.setItem(STAR_PROMPT_KEY, trigger);
+  } catch {
+    // Blocked storage: the in-memory flag still limits it to once per page.
+  }
+  trackStarPrompt(`star_prompt_shown_${trigger}`);
+  const prompt = element("p", { className: "star-prompt", attrs: { role: "status" } });
+  const close = () => {
+    prompt.remove();
+    onClose?.();
+  };
+  // No noreferrer: GitHub traffic then counts the site as the referrer, which
+  // works for readers who decline analytics.
+  const link = element("a", {
+    className: "star-prompt-link",
+    text: `★ ${t("Star on GitHub")}`,
+    attrs: { href: "https://github.com/ktwu01/benchmark-radar", target: "_blank", rel: "noopener" },
+  });
+  link.addEventListener("click", () => {
+    trackStarPrompt(`star_prompt_click_${trigger}`);
+    close();
+  });
+  const dismiss = element("button", {
+    className: "star-prompt-dismiss",
+    text: "×",
+    attrs: { type: "button", "aria-label": t("Close"), title: t("Close") },
+  });
+  dismiss.addEventListener("click", close);
+  prompt.append(element("span", { text: t(STAR_PROMPT_COPY[trigger]) }), link, dismiss);
+  return prompt;
+}
+
+// The Library list is rebuilt on every filter change, so the prompt is kept
+// here and re-inserted under the row that was saved until it is closed.
+let libraryStarPrompt = null;
+
 function libraryRow(record, names, saved) {
   const isSaved = saved.has(record.key);
   const star = element("button", {
@@ -6104,7 +6164,12 @@ function libraryRow(record, names, saved) {
     },
   });
   star.addEventListener("click", () => {
-    setLibrarySaved(record.key, !librarySavedSlugs().has(record.key));
+    const nowSaved = !librarySavedSlugs().has(record.key);
+    setLibrarySaved(record.key, nowSaved);
+    if (nowSaved && !libraryStarPrompt) {
+      const node = starPrompt("save", () => { libraryStarPrompt = null; });
+      if (node) libraryStarPrompt = { key: record.key, node };
+    }
     renderLibrary();
   });
   const direction = record.library_direction;
@@ -6187,7 +6252,10 @@ function renderLibrary() {
     partialMatchNote(rows, state.libraryQuery, (record) => record.slug),
   ].filter(Boolean).join(" · ");
   replaceChildren(list, shown.length
-    ? shown.map((record) => libraryRow(record, names, saved))
+    ? shown.flatMap((record) => [
+      libraryRow(record, names, saved),
+      libraryStarPrompt?.key === record.key ? libraryStarPrompt.node : null,
+    ])
     : [element("p", { className: "empty-state", text: t("No benchmarks match these filters.") })]);
   byId("library-more").hidden = rows.length <= shown.length;
 }
@@ -12020,6 +12088,19 @@ function bindEvents() {
     openCite();
   });
   byId("cite-close").addEventListener("click", () => byId("cite-dialog").close());
+  byId("cite-content").addEventListener("click", (event) => {
+    if (!event.target.closest(".copy-target")) return;
+    const prompt = starPrompt("cite");
+    if (prompt) byId("cite-content").querySelector(".copy-blocks")?.after(prompt);
+  });
+  // Kit opens in a new tab, so this tab can still thank the reader. The
+  // submit event fires only once the browser has validated the form.
+  document.querySelectorAll(".email-signup-form").forEach((form) => {
+    form.addEventListener("submit", () => {
+      const prompt = starPrompt("subscribe");
+      if (prompt) form.after(prompt);
+    });
+  });
   byId("cite-dialog").addEventListener("click", (event) => {
     if (event.target === byId("cite-dialog")) byId("cite-dialog").close();
   });

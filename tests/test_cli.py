@@ -7,6 +7,7 @@ import yaml
 
 from benchmark_radar import cli
 from benchmark_radar.briefing import BriefingError, GeneratedBriefing
+from benchmark_radar.cards import CARDS_DOMAIN
 from benchmark_radar.models import ProducerHealth, RadarItem, RadarRun
 from benchmark_radar.pipeline import SOURCE_FETCHERS
 from benchmark_radar.snapshots import write_snapshot
@@ -563,26 +564,30 @@ def test_pages_custom_domain_stays_on_the_actions_artifact():
     assert upload["with"]["path"] == "site/"
 
 
-def test_pages_deploy_waits_for_the_benchmark_cards_it_links():
-    """Benchmark pages name their card as og:image (issue #671). A deploy that
-    went live before the card was served would let a crawler cache a 404."""
+def test_pages_build_deploys_each_benchmark_card_with_its_page():
+    """Benchmark pages name /cards/<slug>.png as og:image (issue #671, #891).
+    The build draws the cards into the Pages artifact, so a card can never go
+    live later than the page naming it, and the archive job never holds up a
+    deploy."""
     workflow = yaml.safe_load(Path(".github/workflows/pages.yml").read_text(encoding="utf-8"))
     jobs = workflow["jobs"]
-    assert "publish-benchmark-cards" in jobs["deploy"]["needs"]
-    # Cards publish from main only, so another branch's dispatch skips the
-    # job and, through `needs`, the deploy too.
-    assert jobs["publish-benchmark-cards"]["if"] == "github.ref == 'refs/heads/main'"
-    publish = next(
-        step
-        for step in jobs["publish-benchmark-cards"]["steps"]
-        if step.get("name") == "Publish the cards"
+    build = next(
+        step["run"]
+        for step in jobs["build"]["steps"]
+        if step.get("name") == "Build validated dashboard data"
     )
-    assert "curl -fsS" in publish["run"]
-    # The renderer imports Pillow, which only the dev extra installs.
-    install = next(
-        step for step in jobs["publish-benchmark-cards"]["steps"] if step.get("name") == "Install"
+    render = build.index("scripts/render_share_images.py")
+    assert "--output-dir site/cards" in build[render:]
+    assert render < build.index("pytest -q")
+    assert "publish-benchmark-cards" not in jobs["deploy"]["needs"]
+    archive = jobs["publish-benchmark-cards"]
+    assert archive["if"] == "github.ref == 'refs/heads/main'"
+    download = next(
+        step for step in archive["steps"] if "download-artifact" in step.get("uses", "")
     )
-    assert "'.[dev]'" in install["run"]
+    assert download["with"]["name"] == "benchmark-cards"
+    publish = next(step for step in archive["steps"] if step.get("name") == "Publish the cards")
+    assert f'echo "{CARDS_DOMAIN}" > CNAME' in publish["run"]
 
 
 def test_daily_radar_persists_only_a_fresh_target_day_snapshot():

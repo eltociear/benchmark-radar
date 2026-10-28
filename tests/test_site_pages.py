@@ -238,7 +238,8 @@ def test_interactive_view_link_lands_on_saturation_with_the_slug(tmp_path):
 def test_page_previews_and_shares_its_own_benchmark_card(tmp_path):
     output = _generated_pages(tmp_path, _shard("gpqa", "GPQA <Diamond>"))
     html = _page_text(output, "gpqa")
-    card = "https://cards.benchmark-radar.org/gpqa.png"
+    # On the page's own host: X showed no preview for a card on another host (#891).
+    card = "https://benchmark-radar.org/cards/gpqa.png"
     assert f'<meta property="og:image" content="{card}">' in html
     # Hidden until share-card.js wakes it, so no reader meets a dead control.
     button = re.search(r"<button[^>]*data-share-benchmark=[^>]*>", html).group(0)
@@ -251,7 +252,8 @@ def test_page_previews_and_shares_its_own_benchmark_card(tmp_path):
 def test_card_urls_agree_between_the_build_and_the_browser():
     script = Path("site/assets/share-card.js").read_text(encoding="utf-8")
     base = re.search(r'CARDS_URL =\s*"([^"]+)"', script).group(1)
-    assert benchmark_card_url("gpqa") == f"{base}/gpqa.png"
+    # The browser asks its own origin for the card the page names.
+    assert benchmark_card_url("gpqa") == f"{SITE_URL}{base}/gpqa.png"
 
 
 def test_description_is_present_and_derived_from_the_shard(tmp_path):
